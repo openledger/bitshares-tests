@@ -1,0 +1,17 @@
+# IDE
+nbproject/
+.idea/
+venv/
+
+# Python
+.pytest_cache/
+*.pyc
+
+# Flake8 HTML
+flake-report/
+
+# PyTest-Logger
+logs/
+
+# Docker container dir
+docker_logs/
