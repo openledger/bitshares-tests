@@ -5,6 +5,8 @@ from utils.testutil import (calculate_account_reward_amount,
                             wait_blocks)
 from utils.assets import (prepare_reward_user_asset_options,
                           create_new_user_asset)
+import pytest
+from utils.testutil import calculate_percent
 
 
 def test_check_mfs_vesting_balance_with_zero_asset_rewards():
@@ -478,3 +480,163 @@ def test_enumerate_2_rewards_on_referrer_vesting_balance(init_balances):
 
     for mfs_vesting_balance in referrer_list_rewards:
         assert mfs_vesting_balance.allowed_withdraw in assets_list
+
+
+def test_100_percent_as_max_asset_reward_value(init_balances):
+    precision = 0
+    asset_1_percent = 1000  # 1000 means 10%
+    asset_2_percent = 2000  # 2000 means 20%
+    reward_percent = 10000  # 10000 means 100%
+    acc1_ref_percent = 10
+    acc2_ref_percent = 10
+    amount_to_issue = 100000
+    asset_1_amount = 10000
+    asset_2_amount = 20000
+
+    referrer_1 = create_account_with_balance(20000, lifetime=True)
+    referrer_2 = create_account_with_balance(20000, lifetime=True)
+
+    account_1 = create_account_with_balance(balance=1000000,
+                                            referrer=referrer_1.name,
+                                            referrer_percent=acc1_ref_percent)
+    account_2 = create_account_with_balance(balance=1000000,
+                                            referrer=referrer_2.name,
+                                            referrer_percent=acc2_ref_percent)
+
+    log_step('Create 2 new user assets')
+    asset_1_options = prepare_reward_user_asset_options(asset_1_percent,
+                                                        reward_percent)
+    asset_2_options = prepare_reward_user_asset_options(asset_2_percent,
+                                                        reward_percent)
+
+    asset_1 = create_new_user_asset('init1', precision,
+                                    options=asset_1_options)
+    asset_2 = create_new_user_asset('init2', precision,
+                                    options=asset_2_options)
+
+    log_step('Issue assets')
+    CLI_WALLET.issue_asset(
+        account_1.name, amount_to_issue, asset_1.name)
+    CLI_WALLET.issue_asset(
+        account_2.name, amount_to_issue, asset_2.name)
+    wait_blocks()
+
+    log_step('Sell assets')
+    CLI_WALLET.sell_asset(
+        account_1.name, asset_1_amount, asset_1.name, asset_2_amount,
+        asset_2.name, 300)
+    CLI_WALLET.sell_asset(
+        account_2.name, asset_2_amount, asset_2.name, asset_1_amount,
+        asset_1.name, 300)
+    wait_blocks(3)
+
+    log_step('Get mfs vesting balances of referrer_1')
+    referrer_1_list_rewards = CLI_WALLET.get_mfs_vesting_balances_list(
+        referrer_1.name)
+
+    log_step('Get expected referrer_1 reward')
+    expected_referrer_1_reward = calculate_account_reward_amount(
+        asset_2, asset_2_amount, asset_2_percent, reward_percent,
+        acc1_ref_percent)
+
+    log_step('Check if mfs vesting balances of referrer_1 is correct')
+    asset_2_dict = {'asset_id': asset_2.id,
+                    'amount': expected_referrer_1_reward}
+
+    assert len(referrer_1_list_rewards) == 1
+
+    mfs_vesting_balance = referrer_1_list_rewards[0]
+    assert mfs_vesting_balance.allowed_withdraw == asset_2_dict
+
+
+@pytest.mark.skip(reason='Remove "skip" when functionality is merged')
+@pytest.mark.parametrize('reward_percent', [10100, 10001, -1, 'text', '#$%'])
+def test_check_asset_creation_with_incorrect_reward_value(init_balances,
+                                                          reward_percent):
+    precision = 0
+    asset_percent = 1000  # 1000 means 10%
+    ref_percent = 10
+
+    referrer = create_account_with_balance(20000, lifetime=True)
+
+    account = create_account_with_balance(balance=1000000,
+                                          referrer=referrer.name,
+                                          referrer_percent=ref_percent)
+
+    log_step('Try to create user asset with incorrect reward percent: %s'
+             % reward_percent)
+    asset_1_options = prepare_reward_user_asset_options(asset_percent,
+                                                        reward_percent)
+
+    try:
+        create_new_user_asset(account.name, precision, options=asset_1_options)
+        # TODO: Update check for received error message
+    except Exception as e:
+        print e.message
+
+
+def test_0_percent_as_min_asset_reward_value(init_balances):
+    precision = 0
+    asset_1_percent = 1000  # 1000 means 10%
+    asset_2_percent = 2000  # 2000 means 20%
+    reward_percent = 0
+    acc1_ref_percent = 10
+    acc2_ref_percent = 10
+    amount_to_issue = 100000
+    asset_1_amount = 10000
+    asset_2_amount = 20000
+
+    referrer_1 = create_account_with_balance(20000, lifetime=True)
+    referrer_2 = create_account_with_balance(20000, lifetime=True)
+    issuer_1 = create_account_with_balance(20000, lifetime=True)
+    issuer_2 = create_account_with_balance(20000, lifetime=True)
+
+    account_1 = create_account_with_balance(balance=1000000,
+                                            referrer=referrer_1.name,
+                                            referrer_percent=acc1_ref_percent)
+    account_2 = create_account_with_balance(balance=1000000,
+                                            referrer=referrer_2.name,
+                                            referrer_percent=acc2_ref_percent)
+
+    log_step('Create 2 new user assets')
+    asset_1_options = prepare_reward_user_asset_options(asset_1_percent,
+                                                        reward_percent)
+    asset_2_options = prepare_reward_user_asset_options(asset_2_percent,
+                                                        reward_percent)
+
+    asset_1 = create_new_user_asset(issuer_1.name, precision,
+                                    options=asset_1_options)
+    asset_2 = create_new_user_asset(issuer_2.name, precision,
+                                    options=asset_2_options)
+
+    log_step('Issue assets')
+    CLI_WALLET.issue_asset(
+        account_1.name, amount_to_issue, asset_1.name)
+    CLI_WALLET.issue_asset(
+        account_2.name, amount_to_issue, asset_2.name)
+    wait_blocks()
+
+    log_step('Sell assets')
+    CLI_WALLET.sell_asset(
+        account_1.name, asset_1_amount, asset_1.name, asset_2_amount,
+        asset_2.name, 300)
+    CLI_WALLET.sell_asset(
+        account_2.name, asset_2_amount, asset_2.name, asset_1_amount,
+        asset_1.name, 300)
+    wait_blocks(3)
+
+    log_step('Get asset_1 accumulated fees')
+    accumulated_fees = CLI_WALLET.get_accumulated_fees(asset_1.id)
+
+    log_step('Calculate expected asset_1 accumulated fee')
+    expected_accumulated_fees = calculate_percent(
+        asset_1_amount, asset_1_percent, bitshares_value=True)
+
+    log_step('Check if accumulated fee is correct')
+    assert expected_accumulated_fees == accumulated_fees
+
+    log_step('Check if mfs vesting balances of issuer_1 is empty')
+    issuer_1_list_rewards = CLI_WALLET.get_mfs_vesting_balances_list(
+        referrer_1.name)
+
+    assert issuer_1_list_rewards == []
